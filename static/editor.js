@@ -1,0 +1,837 @@
+
+    
+    
+    const socket = io();
+    const sessionId = window.SESSION_ID;
+    const myName = window.MY_NAME;
+
+    let mySid = null;
+    let writerId = null;
+    let hostId = null;
+    let editor;
+    
+    // Audio State (Google Meet Style)
+    let isAudioConnected = false;
+    let isMuted = false;
+    let localStream = null;
+    let pcPeers = {};
+    let audioContext = null;
+    let analyser = null;
+    let dataArray = null;
+
+    // PRODUCTION WEBRTC CONFIGURATION FOR CROSS-NETWORK
+    const rtcConfig = {
+      iceServers: [
+        // Multiple STUN servers for reliability
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" },
+        { urls: "stun:stun3.l.google.com:19302" },
+        { urls: "stun:stun4.l.google.com:19302" },
+        
+        // Free public TURN servers for cross-network connectivity
+        { 
+          urls: "turn:openrelay.metered.ca:80",
+          username: "openrelayproject",
+          credential: "openrelayproject"
+        },
+        {
+          urls: "turn:openrelay.metered.ca:443",
+          username: "openrelayproject", 
+          credential: "openrelayproject"
+        },
+        {
+          urls: "turn:openrelay.metered.ca:443?transport=tcp",
+          username: "openrelayproject",
+          credential: "openrelayproject"
+        },
+        // Backup TURN servers
+        {
+          urls: "turn:turn.bistri.com:80",
+          username: "homeo",
+          credential: "homeo"
+        },
+        {
+          urls: "turn:turn.anyfirewall.com:443?transport=tcp",
+          username: "webrtc",
+          credential: "webrtc"
+        }
+      ],
+      iceTransportPolicy: "all",
+      rtcpMuxPolicy: "require"
+    };
+
+    // Initialize Monaco Editor
+    require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.34.1/min/vs' }});
+    require(["vs/editor/editor.main"], function () {
+      editor = monaco.editor.create(document.getElementById("editor"), {
+        value: "# Welcome to SIREN Collaborative Editor\n# Start coding in Python...\nprint('Hello, World!')",
+        language: "python",
+        theme: "vs-dark",
+        automaticLayout: true,
+        readOnly: true,
+        fontSize: 14,
+        minimap: { enabled: false }
+      });
+
+      editor.onDidChangeModelContent(() => {
+        if (mySid && mySid === writerId) {
+          socket.emit("code_change", { session_id: sessionId, content: editor.getValue() });
+        }
+      });
+    });
+
+    // Socket connection management
+    socket.on("connect", () => {
+      mySid = socket.id;
+      updateConnectionStatus(true, "Connected");
+      socket.emit("join_session", { session_id: sessionId, name: myName });
+      console.log("✅ Connected to server with ID:", mySid);
+      
+      // Request chat history
+      socket.emit("get_chat_history", { session_id: sessionId });
+      
+      // AUTO-CONNECT AUDIO (Google Meet Style)
+      initializeAudio();
+    });
+
+    socket.on("disconnect", () => {
+      updateConnectionStatus(false, "Disconnected");
+      console.log("❌ Disconnected from server");
+      
+      // Auto-disconnect audio when leaving
+      disconnectAudio();
+    });
+
+    function updateConnectionStatus(connected, message) {
+      const statusDot = document.getElementById("statusDot");
+      const statusText = document.getElementById("statusText");
+      
+      statusDot.className = `status-dot ${connected ? 'connected' : 'disconnected'}`;
+      statusText.textContent = message;
+    }
+
+    // ==================== CHAT FUNCTIONALITY ADDED BELOW ====================
+
+    // Tab functionality
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tabName = btn.getAttribute('data-tab');
+        
+        // Update active tab button
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        // Update active tab content
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        document.getElementById(tabName + 'Tab').classList.add('active');
+      });
+    });
+
+    // Chat functionality
+    const chatInput = document.getElementById('chatInput');
+    const sendChatBtn = document.getElementById('sendChatBtn');
+    const chatMessages = document.getElementById('chatMessages');
+
+    function sendChatMessage() {
+      const message = chatInput.value.trim();
+      if (!message) return;
+      
+      socket.emit("send_chat_message", {
+        session_id: sessionId,
+        message: message
+      });
+      
+      chatInput.value = '';
+      chatInput.focus();
+    }
+
+    sendChatBtn.addEventListener('click', sendChatMessage);
+    
+    chatInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        sendChatMessage();
+      }
+    });
+
+    // Handle incoming chat messages
+    socket.on("new_chat_message", (messageData) => {
+      addChatMessage(messageData);
+    });
+
+    socket.on("chat_history", (data) => {
+      chatMessages.innerHTML = '';
+      if (data.messages && data.messages.length > 0) {
+        data.messages.forEach(message => {
+          addChatMessage(message);
+        });
+      } else {
+        chatMessages.innerHTML = '<div style="text-align: center; color: #9ca3af; padding: 20px;">No messages yet. Start a conversation!</div>';
+      }
+    });
+
+    function addChatMessage(messageData) {
+      const isMe = messageData.sender_sid === mySid;
+      
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `chat-message ${isMe ? 'me' : 'other'}`;
+      
+      messageDiv.innerHTML = `
+        ${!isMe ? `<div class="message-sender">${messageData.sender_name}</div>` : ''}
+        <div class="message-text">${escapeHtml(messageData.message)}</div>
+        <div class="message-time">${messageData.time_display || formatTime(messageData.timestamp)}</div>
+      `;
+      
+      // Remove the "no messages" placeholder if it exists
+      const placeholder = chatMessages.querySelector('div[style*="text-align: center"]');
+      if (placeholder) {
+        placeholder.remove();
+      }
+      
+      chatMessages.appendChild(messageDiv);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatTime(timestamp) {
+      const date = new Date(timestamp * 1000);
+      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // ==================== END OF CHAT FUNCTIONALITY ====================
+
+    // [Keep all your existing JavaScript code exactly as it is below]
+    // Code synchronization, participants management, audio functions, etc.
+    // ... (all your existing code remains unchanged)
+
+    // Code synchronization
+    socket.on("code_update", data => {
+      if (editor && mySid !== writerId) {
+        const position = editor.getPosition();
+        editor.setValue(data.content);
+        editor.setPosition(position);
+      }
+    });
+
+    // Participants management
+    socket.on("participants_update", data => {
+      const plist = document.getElementById("plist");
+      plist.innerHTML = "";
+      
+      writerId = data.writer_id;
+      hostId = data.host_id;
+
+      let participantCount = 0;
+
+      for (const [sid, info] of Object.entries(data.participants)) {
+        participantCount++;
+        
+        const li = document.createElement("li");
+        
+        const infoDiv = document.createElement("div");
+        infoDiv.className = "participant-info";
+        
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "participant-name";
+        nameSpan.textContent = info.name + (sid === mySid ? " (You)" : "");
+        
+        const roleSpan = document.createElement("span");
+        roleSpan.className = "participant-role";
+        
+        let roleText = "";
+        if (sid === hostId) roleText += "👑 Host";
+        if (sid === writerId) roleText += " ✏️ Writer";
+        if (!roleText) roleText = "Participant";
+        
+        roleSpan.textContent = roleText;
+        
+        // Audio status indicator
+        const audioDiv = document.createElement("div");
+        audioDiv.className = "participant-audio";
+        
+        const audioIndicator = document.createElement("div");
+        audioIndicator.className = "audio-indicator";
+        audioIndicator.id = `audio-indicator-${sid}`;
+        
+        const audioStatus = document.createElement("span");
+        audioStatus.textContent = "Connected";
+        audioStatus.style.fontSize = "10px";
+        audioStatus.style.color = "#9ca3af";
+        
+        audioDiv.appendChild(audioIndicator);
+        audioDiv.appendChild(audioStatus);
+        
+        infoDiv.appendChild(nameSpan);
+        infoDiv.appendChild(roleSpan);
+        infoDiv.appendChild(audioDiv);
+
+        const actionsDiv = document.createElement("div");
+        actionsDiv.className = "participant-actions";
+        
+        // Only show action buttons if I'm the host and this isn't me
+        if (mySid === hostId && sid !== mySid) {
+          const grantBtn = document.createElement("button");
+          grantBtn.className = "action-btn";
+          grantBtn.textContent = sid === writerId ? "Revoke Write" : "Grant Write";
+          grantBtn.onclick = () => {
+            if (sid === writerId) {
+              socket.emit("revoke_write", { session_id: sessionId });
+            } else {
+              socket.emit("grant_write", { session_id: sessionId, target_sid: sid });
+            }
+          };
+          actionsDiv.appendChild(grantBtn);
+        }
+
+        li.appendChild(infoDiv);
+        li.appendChild(actionsDiv);
+        plist.appendChild(li);
+      }
+
+      // Update participant count
+      document.getElementById("participantCount").textContent = participantCount;
+
+      // Update editor read-only status and writer banner
+      if (editor) {
+        const isWriter = mySid === writerId;
+        editor.updateOptions({ readOnly: !isWriter });
+        document.getElementById("writerBanner").style.display = isWriter ? "block" : "none";
+      }
+
+      // Auto-connect to new participants (Google Meet Style)
+      if (isAudioConnected) {
+        connectToNewParticipants(data.participants);
+      }
+    });
+
+    function connectToNewParticipants(participants) {
+      for (const [sid, info] of Object.entries(participants)) {
+        if (sid !== mySid && !pcPeers[sid] && isAudioConnected) {
+          createPeerConnection(sid, info.name);
+        }
+      }
+    }
+
+    // Code execution
+    document.getElementById("runBtn").onclick = async () => {
+      const output = document.getElementById("output");
+      output.textContent = "🚀 Running code...\n";
+      
+      try {
+        const response = await fetch("/run_code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            code: editor.getValue(), 
+            session_id: sessionId 
+          })
+        });
+        
+        const data = await response.json();
+        output.textContent += data.output + "\n✅ Execution completed";
+      } catch (error) {
+        output.textContent += `❌ Error: ${error.message}\n`;
+      }
+    };
+
+    document.getElementById("clearBtn").onclick = () => {
+      document.getElementById("output").textContent = "";
+    };
+
+    // [Keep all your existing audio functions - initializeAudio, setupAudioVisualization, etc.]
+    // ... (all audio functions remain the same from your previous version)
+
+    // GOOGLE MEET STYLE AUDIO SYSTEM
+    const muteButton = document.getElementById("muteButton");
+    const muteIcon = document.getElementById("muteIcon");
+    const muteText = document.getElementById("muteText");
+    const audioStatus = document.getElementById("audioStatus");
+    const peerCount = document.getElementById("peerCount");
+    const audioList = document.getElementById("audioList");
+    const audioCount = document.getElementById("audioCount");
+    const audioLevelFill = document.getElementById("audioLevelFill");
+
+    // Auto-initialize audio when joining
+    async function initializeAudio() {
+      try {
+        console.log("🎤 Auto-connecting audio (Google Meet style)...");
+        
+        // Get microphone access
+        localStream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1
+          }
+        });
+        
+        isAudioConnected = true;
+        
+        // Setup audio visualization
+        setupAudioVisualization();
+        
+        // Connect to existing participants
+        setTimeout(() => {
+          socket.emit("get_participants", { session_id: sessionId });
+        }, 1000);
+        
+        console.log("✅ Audio auto-connected successfully");
+        showMessage("🎤 Voice chat is now active! Click Mute/Unmute to control your microphone.");
+
+      } catch (error) {
+        console.error("❌ Failed to auto-connect audio:", error);
+        showMessage("❌ Could not access microphone. Please check browser permissions.");
+        audioStatus.textContent = "Failed";
+        audioStatus.style.color = "#ef4444";
+      }
+    }
+
+    function setupAudioVisualization() {
+      try {
+        audioContext = new AudioContext();
+        analyser = audioContext.createAnalyser();
+        const source = audioContext.createMediaStreamSource(localStream);
+        source.connect(analyser);
+        analyser.fftSize = 256;
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+        
+        updateAudioLevel();
+      } catch (error) {
+        console.error("Audio visualization error:", error);
+      }
+    }
+
+    function updateAudioLevel() {
+      if (!analyser || !isAudioConnected) {
+        audioLevelFill.style.width = "0%";
+        requestAnimationFrame(updateAudioLevel);
+        return;
+      }
+      
+      analyser.getByteFrequencyData(dataArray);
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        sum += dataArray[i];
+      }
+      let average = sum / dataArray.length;
+      
+      // Convert to percentage (0-100%)
+      let level = Math.min(100, (average / 128) * 100);
+      audioLevelFill.style.width = level + "%";
+      
+      // Update speaking indicator for myself
+      const myIndicator = document.getElementById(`audio-indicator-${mySid}`);
+      if (myIndicator && !isMuted && level > 10) {
+        myIndicator.classList.add('speaking');
+      } else if (myIndicator) {
+        myIndicator.classList.remove('speaking');
+      }
+      
+      requestAnimationFrame(updateAudioLevel);
+    }
+
+    // Mute/Unmute functionality
+    muteButton.addEventListener("click", toggleMute);
+
+    function toggleMute() {
+      if (!isAudioConnected) {
+        showMessage("❌ Audio is not connected. Please refresh the page.");
+        return;
+      }
+      
+      if (isMuted) {
+        // Unmute
+        unmuteAudio();
+      } else {
+        // Mute
+        muteAudio();
+      }
+    }
+
+    function muteAudio() {
+      if (localStream) {
+        localStream.getAudioTracks().forEach(track => {
+          track.enabled = false;
+        });
+      }
+      
+      isMuted = true;
+      muteButton.classList.add("muted");
+      muteIcon.textContent = "🔇";
+      muteText.textContent = "Unmute";
+      audioLevelFill.style.width = "0%";
+      
+      console.log("🔇 Microphone muted");
+      showMessage("🔇 You are muted");
+    }
+
+    function unmuteAudio() {
+      if (localStream) {
+        localStream.getAudioTracks().forEach(track => {
+          track.enabled = true;
+        });
+      }
+      
+      isMuted = false;
+      muteButton.classList.remove("muted");
+      muteIcon.textContent = "🎤";
+      muteText.textContent = "Mute";
+      
+      console.log("🎤 Microphone unmuted");
+      showMessage("🎤 You are unmuted - others can hear you");
+    }
+
+    async function disconnectAudio() {
+      console.log("🎤 Disconnecting audio...");
+      
+      // Close all peer connections
+      Object.values(pcPeers).forEach(pc => {
+        pc.close();
+      });
+      pcPeers = {};
+      
+      // Stop local stream
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+      
+      // Close audio context
+      if (audioContext) {
+        await audioContext.close();
+        audioContext = null;
+      }
+      
+      isAudioConnected = false;
+      audioStatus.textContent = "Disconnected";
+      audioStatus.style.color = "#ef4444";
+      audioLevelFill.style.width = "0%";
+      
+      // Clear audio list
+      audioList.innerHTML = "";
+      updateAudioCount();
+      
+      console.log("✅ Audio disconnected");
+    }
+
+    function updateAudioCount() {
+      const count = Object.keys(pcPeers).length;
+      peerCount.textContent = count;
+      audioCount.textContent = `${count} user${count !== 1 ? 's' : ''}`;
+    }
+
+    function showMessage(message) {
+      const output = document.getElementById("output");
+      const originalContent = output.textContent;
+      output.textContent = `[Audio] ${message}\n${originalContent}`;
+      output.scrollTop = 0;
+    }
+
+    // WebRTC Peer Connection Management
+    function createPeerConnection(peerId, peerName) {
+      console.log(`🔗 Creating peer connection to: ${peerName}`);
+      
+      const pc = new RTCPeerConnection(rtcConfig);
+      pcPeers[peerId] = pc;
+
+      // Add local stream to connection
+      if (localStream) {
+        localStream.getTracks().forEach(track => {
+          pc.addTrack(track, localStream);
+        });
+      }
+
+      // Handle remote stream
+      pc.ontrack = (event) => {
+        console.log(`🎧 Received audio stream from: ${peerName}`);
+        const audioElement = document.createElement("audio");
+        audioElement.autoplay = true;
+        audioElement.controls = false;
+        audioElement.style.display = "none";
+        audioElement.srcObject = event.streams[0];
+        document.body.appendChild(audioElement);
+        
+        addAudioParticipant(peerId, peerName, "connected");
+        showMessage(`🎧 Connected to ${peerName}'s audio`);
+      };
+
+      // Handle ICE candidates
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit("webrtc_ice_candidate", {
+            target: peerId,
+            candidate: event.candidate
+          });
+        }
+      };
+
+      // Handle connection state
+      pc.onconnectionstatechange = () => {
+        console.log(`Connection state with ${peerName}: ${pc.connectionState}`);
+        if (pc.connectionState === 'connected') {
+          updateAudioParticipantStatus(peerId, 'connected');
+        } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+          updateAudioParticipantStatus(peerId, 'disconnected');
+        }
+      };
+
+      // Create and send offer
+      pc.createOffer()
+        .then(offer => pc.setLocalDescription(offer))
+        .then(() => {
+          socket.emit("webrtc_offer", {
+            target: peerId,
+            sdp: pc.localDescription
+          });
+        })
+        .catch(error => {
+          console.error("Error creating offer:", error);
+        });
+
+      return pc;
+    }
+
+    function addAudioParticipant(peerId, peerName, status) {
+      const existing = document.getElementById(`audio-${peerId}`);
+      if (existing) {
+        existing.remove();
+      }
+
+      const div = document.createElement("div");
+      div.id = `audio-${peerId}`;
+      div.className = "audio-participant";
+      div.innerHTML = `
+        <span>${peerName}</span>
+        <span class="audio-status ${status}">${status}</span>
+      `;
+      audioList.appendChild(div);
+      updateAudioCount();
+    }
+
+    function updateAudioParticipantStatus(peerId, status) {
+      const element = document.getElementById(`audio-${peerId}`);
+      if (element) {
+        const statusEl = element.querySelector('.audio-status');
+        statusEl.textContent = status;
+        statusEl.className = `audio-status ${status}`;
+      }
+    }
+
+    // WebRTC signaling handlers
+    socket.on("webrtc_offer", async (data) => {
+      if (!isAudioConnected) return;
+      
+      const { sid, sdp } = data;
+      let pc = pcPeers[sid];
+      
+      if (!pc) {
+        pc = createPeerConnection(sid, "User");
+      }
+      
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        
+        socket.emit("webrtc_answer", {
+          target: sid,
+          sdp: pc.localDescription
+        });
+      } catch (error) {
+        console.error("Error handling offer:", error);
+      }
+    });
+
+    socket.on("webrtc_answer", async (data) => {
+      if (!isAudioConnected) return;
+      
+      const { sid, sdp } = data;
+      const pc = pcPeers[sid];
+      
+      if (pc) {
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        } catch (error) {
+          console.error("Error handling answer:", error);
+        }
+      }
+    });
+
+    socket.on("webrtc_ice_candidate", async (data) => {
+      if (!isAudioConnected) return;
+      
+      const { sid, candidate } = data;
+      const pc = pcPeers[sid];
+      
+      if (pc && candidate) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (error) {
+          console.error("Error adding ICE candidate:", error);
+        }
+      }
+    });
+
+    // Request participants list
+    socket.on("get_participants", () => {
+      // This would be handled by the server
+    });
+
+    // UI Helpers
+    document.getElementById("helpBtn").addEventListener("click", () => {
+      alert(`SIREN Features:\n\n💬 NEW: WhatsApp-style chat\n🎤 AUDIO: Auto-connect voice chat\n🐍 CODE: Python execution\n👥 COLLAB: Real-time collaboration\n\nUse the tabs to switch between Participants and Chat!`);
+    });
+
+    document.getElementById("settingsBtn").addEventListener("click", () => {
+      alert("Session Settings:\n\n• Audio: " + (isAudioConnected ? "Connected" : "Disconnected") + "\n• Mute: " + (isMuted ? "On" : "Off") + "\n• Role: " + (mySid === writerId ? "Writer" : "Viewer") + "\n• Connected Peers: " + Object.keys(pcPeers).length);
+    });
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+      disconnectAudio();
+    });
+
+    
+    const staticInput = document.getElementById("staticInput");
+    const sendInputBtn = document.getElementById("sendInputBtn");
+
+    document.getElementById("runBtn").onclick = async () => {
+        const output = document.getElementById("output");
+        output.textContent = "🚀 Starting code execution...\n";
+        output.scrollTop = output.scrollHeight;
+        
+        const runBtn = document.getElementById("runBtn");
+        runBtn.disabled = true;
+        runBtn.textContent = "⏳ Running...";
+        runBtn.classList.add("warning");
+        
+        // Enable input controls
+        staticInput.disabled = false;
+        sendInputBtn.disabled = false;
+        staticInput.placeholder = "Type input for program...";
+        staticInput.focus();
+        
+        try {
+            const response = await fetch("/run_code", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    code: editor.getValue(), 
+                    session_id: sessionId 
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.status === "started") {
+                currentProcessId = data.process_id;
+                console.log("✅ Code execution started with process ID:", currentProcessId);
+                output.textContent += "Program started. Use the input box above to provide input.\n";
+            } else if (data.status === "error") {
+                output.textContent += `❌ ${data.message}\n`;
+                resetExecutionState();
+            } else {
+                output.textContent += "❌ Unexpected response from server\n";
+                resetExecutionState();
+            }
+        } catch (error) {
+            output.textContent += `❌ Network error: ${error.message}\n`;
+            resetExecutionState();
+        }
+    };
+
+    // Handle sending input from static input box
+    sendInputBtn.addEventListener("click", sendStaticInput);
+    
+    staticInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+            sendStaticInput();
+        }
+    });
+
+    function sendStaticInput() {
+        const userInput = staticInput.value.trim();
+        
+        if (!userInput) {
+            return;
+        }
+        
+        if (!currentProcessId) {
+            const output = document.getElementById("output");
+            output.textContent += "❌ No program is currently running\n";
+            return;
+        }
+        
+        const output = document.getElementById("output");
+        output.textContent += `📥 [Input]: ${userInput}\n`;
+        output.scrollTop = output.scrollHeight;
+        
+        // Send input to the backend process
+        fetch("/provide_input", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+                user_input: userInput,
+                process_id: currentProcessId
+            })
+        }).then(response => response.json())
+          .then(data => {
+              if (data.status === "success") {
+                  console.log("✅ Input sent successfully");
+                  staticInput.value = ""; // Clear input field
+                  staticInput.focus();
+              } else {
+                  output.textContent += `❌ ${data.message}\n`;
+              }
+          })
+          .catch(error => {
+              output.textContent += `❌ Error sending input: ${error.message}\n`;
+          });
+    }
+
+    // Handle real-time code output
+    socket.on("code_output", (data) => {
+        if (data.process_id === currentProcessId) {
+            const output = document.getElementById("output");
+            output.textContent += data.output;
+            output.scrollTop = output.scrollHeight;
+        }
+    });
+
+    // Handle code completion
+    socket.on("code_complete", (data) => {
+        if (data.process_id === currentProcessId) {
+            const output = document.getElementById("output");
+            output.textContent += "\n✅ Program execution completed\n";
+            output.scrollTop = output.scrollHeight;
+            
+            resetExecutionState();
+        }
+    });
+
+    function resetExecutionState() {
+        const runBtn = document.getElementById("runBtn");
+        runBtn.disabled = false;
+        runBtn.textContent = "▶ Run Code";
+        runBtn.classList.remove("warning");
+        
+        // Disable input controls
+        staticInput.disabled = true;
+        sendInputBtn.disabled = true;
+        staticInput.value = "";
+        staticInput.placeholder = "Run code to enable input...";
+        
+        currentProcessId = null;
+    }
+
+    document.getElementById("clearBtn").onclick = () => {
+        document.getElementById("output").textContent = "";
+        resetExecutionState();
+    };
+    console.log("🚀SCIAM with Chat functionality ready!");

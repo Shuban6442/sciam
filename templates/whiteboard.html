@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Whiteboard - Session {{ session_id }}</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel: #111827;
+            --text: #e5e7eb;
+            --accent: #3b82f6;
+            --success: #10b981;
+            --error: #ef4444;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            overflow: hidden;
+        }
+        
+        .whiteboard-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        
+        .whiteboard-header {
+            background: var(--panel);
+            padding: 10px 20px;
+            border-bottom: 1px solid #2a3342;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .session-info {
+            background: #1f2937;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-family: monospace;
+        }
+        
+        .user-role {
+            font-size: 14px;
+            color: #9ca3af;
+        }
+        
+        .user-role.host {
+            color: #10b981;
+            font-weight: bold;
+        }
+        
+        .user-role.viewer {
+            color: #6b7280;
+        }
+        
+        .whiteboard-controls {
+            background: var(--panel);
+            padding: 10px 20px;
+            border-bottom: 1px solid #2a3342;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid #2a3342;
+            background: #1f2937;
+            color: var(--text);
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .btn:hover {
+            background: #374151;
+        }
+        
+        .btn.primary {
+            background: #2563eb;
+            border-color: #2563eb;
+        }
+        
+        .btn.primary:hover {
+            background: #1d4ed8;
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .tool-separator {
+            width: 1px;
+            height: 20px;
+            background: #2a3342;
+            margin: 0 10px;
+        }
+        
+        .color-picker {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        
+        .color-option {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        
+        .color-option.active {
+            border-color: white;
+        }
+        
+        .brush-size {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .brush-preview {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+        
+        #whiteboardCanvas {
+            flex: 1;
+            background: white;
+            cursor: crosshair;
+        }
+        
+        .viewer-mode {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 1000;
+            border: 2px solid #374151;
+        }
+        
+        .status-bar {
+            background: var(--panel);
+            padding: 8px 20px;
+            border-top: 1px solid #2a3342;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: #9ca3af;
+        }
+        
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #6b7280;
+        }
+        
+        .status-dot.connected {
+            background: var(--success);
+        }
+        
+        .status-dot.disconnected {
+            background: var(--error);
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #1e293b;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+            z-index: 10000;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div class="whiteboard-container">
+        <!-- Header -->
+        <div class="whiteboard-header">
+            <div class="header-left">
+                <span style="font-weight: bold; color: #3b82f6;">SIREN Whiteboard</span>
+                <span class="session-info">Session: {{ session_id }}</span>
+                <span class="user-role" id="userRole">Connecting...</span>
+            </div>
+            <button class="btn" onclick="window.close()">Close Whiteboard</button>
+        </div>
+
+        <!-- Controls (Only visible to host) -->
+        <div class="whiteboard-controls" id="whiteboardControls" style="display: none;">
+            <!-- Drawing Tools -->
+            <div class="tool-group">
+                <button class="btn primary" id="pencilTool" data-tool="pencil">✏️ Pencil</button>
+                <button class="btn" id="lineTool" data-tool="line">📏 Line</button>
+                <button class="btn" id="rectangleTool" data-tool="rectangle">⬜ Rectangle</button>
+                <button class="btn" id="circleTool" data-tool="circle">⭕ Circle</button>
+            </div>
+            
+            <div class="tool-separator"></div>
+            
+            <!-- Colors -->
+            <div class="color-picker">
+                <span>Color:</span>
+                <div class="color-option active" style="background: black;" data-color="black"></div>
+                <div class="color-option" style="background: red;" data-color="red"></div>
+                <div class="color-option" style="background: blue;" data-color="blue"></div>
+                <div class="color-option" style="background: green;" data-color="green"></div>
+                <div class="color-option" style="background: yellow;" data-color="yellow"></div>
+                <div class="color-option" style="background: white; border: 1px solid #ccc;" data-color="white"></div>
+            </div>
+            
+            <div class="tool-separator"></div>
+            
+            <!-- Brush Size -->
+            <div class="brush-size">
+                <span>Size:</span>
+                <input type="range" id="brushSize" min="1" max="20" value="3">
+                <div class="brush-preview" id="brushPreview"></div>
+            </div>
+            
+            <div class="tool-separator"></div>
+            
+            <!-- Actions -->
+            <button class="btn" id="undoBtn" title="Undo">↩️ Undo</button>
+            <button class="btn" id="clearBtn" title="Clear All">🗑️ Clear</button>
+            
+            <div class="tool-separator"></div>
+            
+            <!-- Background -->
+            <div class="color-picker">
+                <span>Background:</span>
+                <div class="color-option active" style="background: white; border: 1px solid #ccc;" data-bg="white"></div>
+                <div class="color-option" style="background: #f0f0f0;" data-bg="lightgray"></div>
+                <div class="color-option" style="background: #1e1e1e;" data-bg="darkgray"></div>
+                <div class="color-option" style="background: black;" data-bg="black"></div>
+            </div>
+        </div>
+
+        <!-- Canvas -->
+        <canvas id="whiteboardCanvas"></canvas>
+
+        <!-- Viewer Mode Message -->
+        <div class="viewer-mode" id="viewerMode" style="display: none;">
+            <h3>👀 Viewing Mode</h3>
+            <p>You are viewing the whiteboard. Only the session host can draw.</p>
+            <p><strong>Current Host: <span id="currentHostName">Loading...</span></strong></p>
+            <p>You will see real-time updates when the host draws.</p>
+        </div>
+
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="connection-status">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Connecting...</span>
+            </div>
+            <div id="userCount">Users: 1</div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const sessionId = "{{ session_id }}";
+        const urlParams = new URLSearchParams(window.location.search);
+        const userName = urlParams.get("name") || "Anonymous";
+
+        let canvas, ctx;
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let currentTool = 'pencil';
+        let currentColor = 'black';
+        let currentBrushSize = 3;
+        let canDraw = false;
+        let users = new Set();
+        let hostId = null;
+        let hostName = "Unknown";
+        let mySid = null;
+
+        // Initialize whiteboard
+        function initializeWhiteboard() {
+            canvas = document.getElementById('whiteboardCanvas');
+            ctx = canvas.getContext('2d');
+            
+            // Set canvas size
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            
+            // Set initial background
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Set initial brush preview
+            updateBrushPreview();
+        }
+
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight - 120; // Account for header and controls
+        }
+
+        function updateBrushPreview() {
+            const preview = document.getElementById('brushPreview');
+            preview.style.width = `${currentBrushSize * 2}px`;
+            preview.style.height = `${currentBrushSize * 2}px`;
+            preview.style.color = currentColor;
+        }
+
+        // Socket event handlers
+        socket.on('connect', () => {
+            mySid = socket.id;
+            updateStatus(true, 'Connected');
+            socket.emit('whiteboard_join', { session_id: sessionId });
+        });
+
+        socket.on('disconnect', () => {
+            updateStatus(false, 'Disconnected');
+        });
+
+        socket.on('whiteboard_state', (data) => {
+            console.log('Received whiteboard state:', data);
+            canDraw = data.can_draw;
+            hostId = data.host_id;
+            hostName = data.host_name;
+            mySid = data.my_sid;
+            
+            // Update UI based on permissions
+            updateUIBasedOnPermissions();
+            
+            // Draw existing elements
+            redrawWhiteboard(data.elements, data.background);
+        });
+
+        socket.on('whiteboard_element', (data) => {
+            drawElement(data.element);
+        });
+
+        socket.on('whiteboard_cleared', () => {
+            clearCanvas();
+        });
+
+        socket.on('whiteboard_undone', () => {
+            // Rejoin to get updated state
+            socket.emit('whiteboard_join', { session_id: sessionId });
+        });
+
+        socket.on('whiteboard_background_changed', (data) => {
+            changeBackground(data.background);
+        });
+
+        socket.on('whiteboard_user_joined', (data) => {
+            users.add(data.user_id);
+            updateUserCount();
+        });
+
+        socket.on('whiteboard_host_changed', (data) => {
+            hostId = data.new_host_id;
+            hostName = data.new_host_name;
+            canDraw = (mySid === hostId);
+            
+            // Update UI when host changes
+            updateUIBasedOnPermissions();
+            
+            // Show notification
+            showNotification(`🎨 Host changed to: ${hostName}`);
+        });
+
+        socket.on('whiteboard_error', (data) => {
+            showNotification('❌ ' + data.message);
+        });
+
+        // Update UI based on current permissions
+        function updateUIBasedOnPermissions() {
+            const isHost = (mySid === hostId);
+            
+            if (isHost) {
+                document.getElementById('userRole').textContent = '🎨 Host (You can draw)';
+                document.getElementById('userRole').className = 'user-role host';
+                document.getElementById('whiteboardControls').style.display = 'flex';
+                document.getElementById('viewerMode').style.display = 'none';
+                setupDrawingEvents();
+            } else {
+                document.getElementById('userRole').textContent = `👀 Viewer - Host: ${hostName}`;
+                document.getElementById('userRole').className = 'user-role viewer';
+                document.getElementById('whiteboardControls').style.display = 'none';
+                document.getElementById('viewerMode').style.display = 'block';
+                document.getElementById('currentHostName').textContent = hostName;
+            }
+            
+            console.log(`Whiteboard permissions: canDraw=${canDraw}, isHost=${isHost}, hostId=${hostId}, mySid=${mySid}`);
+        }
+
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+
+        // Drawing functions
+        function setupDrawingEvents() {
+            if (!canDraw) return;
+
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseout', stopDrawing);
+            
+            // Touch support
+            canvas.addEventListener('touchstart', handleTouchStart);
+            canvas.addEventListener('touchmove', handleTouchMove);
+            canvas.addEventListener('touchend', stopDrawing);
+        }
+
+        function startDrawing(e) {
+            if (!canDraw) {
+                showNotification("❌ Only the session host can draw");
+                return;
+            }
+            isDrawing = true;
+            [lastX, lastY] = getCoordinates(e);
+        }
+
+        function draw(e) {
+            if (!isDrawing || !canDraw) return;
+            
+            const [x, y] = getCoordinates(e);
+            
+            // Create drawing element
+            const element = {
+                type: currentTool,
+                points: [{x: lastX, y: lastY}, {x: x, y: y}],
+                color: currentColor,
+                size: currentBrushSize,
+                timestamp: Date.now()
+            };
+            
+            // Draw locally
+            drawElement(element);
+            
+            // Send to server
+            socket.emit('whiteboard_draw', {
+                session_id: sessionId,
+                element: element
+            });
+            
+            [lastX, lastY] = [x, y];
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        function handleTouchStart(e) {
+            e.preventDefault();
+            startDrawing(e.touches[0]);
+        }
+
+        function handleTouchMove(e) {
+            e.preventDefault();
+            draw(e.touches[0]);
+        }
+
+        function getCoordinates(e) {
+            const rect = canvas.getBoundingClientRect();
+            return [
+                e.clientX - rect.left,
+                e.clientY - rect.top
+            ];
+        }
+
+        function drawElement(element) {
+            ctx.beginPath();
+            ctx.strokeStyle = element.color;
+            ctx.lineWidth = element.size;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            if (element.type === 'pencil' && element.points.length >= 2) {
+                ctx.moveTo(element.points[0].x, element.points[0].y);
+                for (let i = 1; i < element.points.length; i++) {
+                    ctx.lineTo(element.points[i].x, element.points[i].y);
+                }
+                ctx.stroke();
+            } else if (element.type === 'line' && element.points.length === 2) {
+                ctx.moveTo(element.points[0].x, element.points[0].y);
+                ctx.lineTo(element.points[1].x, element.points[1].y);
+                ctx.stroke();
+            } else if (element.type === 'rectangle' && element.points.length === 2) {
+                const width = element.points[1].x - element.points[0].x;
+                const height = element.points[1].y - element.points[0].y;
+                ctx.strokeRect(element.points[0].x, element.points[0].y, width, height);
+            } else if (element.type === 'circle' && element.points.length === 2) {
+                const radius = Math.sqrt(
+                    Math.pow(element.points[1].x - element.points[0].x, 2) +
+                    Math.pow(element.points[1].y - element.points[0].y, 2)
+                );
+                ctx.arc(element.points[0].x, element.points[0].y, radius, 0, 2 * Math.PI);
+                ctx.stroke();
+            }
+            
+            ctx.closePath();
+        }
+
+        function redrawWhiteboard(elements, background) {
+            clearCanvas();
+            changeBackground(background);
+            
+            if (elements && elements.length > 0) {
+                elements.forEach(element => {
+                    drawElement(element);
+                });
+            }
+        }
+
+        function clearCanvas() {
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function changeBackground(color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // UI Controls
+        function setupUIControls() {
+            // Tool selection
+            document.querySelectorAll('[data-tool]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    if (!canDraw) {
+                        showNotification("❌ Only the session host can draw");
+                        return;
+                    }
+                    document.querySelectorAll('[data-tool]').forEach(b => {
+                        b.classList.remove('primary');
+                    });
+                    btn.classList.add('primary');
+                    currentTool = btn.dataset.tool;
+                });
+            });
+
+            // Color selection
+            document.querySelectorAll('.color-option[data-color]').forEach(option => {
+                option.addEventListener('click', () => {
+                    if (!canDraw) return;
+                    document.querySelectorAll('.color-option[data-color]').forEach(opt => {
+                        opt.classList.remove('active');
+                    });
+                    option.classList.add('active');
+                    currentColor = option.dataset.color;
+                    updateBrushPreview();
+                });
+            });
+
+            // Background selection
+            document.querySelectorAll('.color-option[data-bg]').forEach(option => {
+                option.addEventListener('click', () => {
+                    if (!canDraw) {
+                        showNotification("❌ Only the session host can change background");
+                        return;
+                    }
+                    const background = option.dataset.bg;
+                    changeBackground(background);
+                    socket.emit('whiteboard_background', {
+                        session_id: sessionId,
+                        background: background
+                    });
+                });
+            });
+
+            // Brush size
+            document.getElementById('brushSize').addEventListener('input', (e) => {
+                currentBrushSize = parseInt(e.target.value);
+                updateBrushPreview();
+            });
+
+            // Clear button
+            document.getElementById('clearBtn').addEventListener('click', () => {
+                if (!canDraw) {
+                    showNotification("❌ Only the session host can clear the whiteboard");
+                    return;
+                }
+                if (confirm('Clear the entire whiteboard?')) {
+                    clearCanvas();
+                    socket.emit('whiteboard_clear', { session_id: sessionId });
+                }
+            });
+
+            // Undo button
+            document.getElementById('undoBtn').addEventListener('click', () => {
+                if (!canDraw) {
+                    showNotification("❌ Only the session host can undo");
+                    return;
+                }
+                socket.emit('whiteboard_undo', { session_id: sessionId });
+            });
+        }
+
+        function updateStatus(connected, message) {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            dot.className = `status-dot ${connected ? 'connected' : 'disconnected'}`;
+            text.textContent = message;
+        }
+
+        function updateUserCount() {
+            document.getElementById('userCount').textContent = `Users: ${users.size + 1}`;
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeWhiteboard();
+            setupUIControls();
+            
+            // Set pencil as default tool
+            document.getElementById('pencilTool').classList.add('primary');
+        });
+
+        console.log('🎨 Whiteboard initialized with host permissions');
+    </script>
+</body>
+</html>

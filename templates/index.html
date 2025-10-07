@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Join or Create Session</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 32px; }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; }
+        input, button { padding: 8px 10px; font-size: 14px; }
+        #sessionCode { width: 280px; max-width: 100%; }
+    </style>
+</head>
+<body>
+    <h2>Collaborative Session</h2>
+    <p>Enter a session code to join. Or create a new session.</p>
+
+    <div class="row">
+        <input id="sessionCode" type="text" placeholder="Session code (e.g. ab12cd34)" autocomplete="off" />
+        <button id="joinBtn">Join</button>
+        <button id="createBtn">Create New Session</button>
+    </div>
+
+    <script>
+    (function(){
+        var input = document.getElementById('sessionCode');
+        var joinBtn = document.getElementById('joinBtn');
+        var createBtn = document.getElementById('createBtn');
+
+        function goJoin(){
+            var code = (input.value || '').trim();
+            if (!code) { input.focus(); return; }
+            // Navigate directly to /session/<code>
+            window.location.href = '/session/' + encodeURIComponent(code);
+        }
+
+        joinBtn.addEventListener('click', goJoin);
+        input.addEventListener('keydown', function(e){ if (e.key === 'Enter') { goJoin(); } });
+        createBtn.addEventListener('click', function(){ window.location.href = '/create'; });
+    })();
+    </script>
+</body>
+</html>
