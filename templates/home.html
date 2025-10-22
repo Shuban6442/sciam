@@ -163,29 +163,17 @@
     </style>
 </head>
 <body>
-        <div class="header">
-                <h1 class="title">SCIAM</h1>
-                <p class="subtitle">Real-time Collaborative Code Editor</p>
-                <div id="authHeader" style="margin-top:12px; display:flex; gap:8px; justify-content:center; align-items:center;">
-                        {% if is_authenticated %}
-                            <span id="signedInText" style="font-size:14px; opacity:0.9;">Signed in as <strong id="signedInName">{{ username }}</strong></span>
-                            <a class="btn secondary" href="/logout" style="padding:6px 12px;">Logout</a>
-                        {% else %}
-                            <button class="btn secondary" style="padding:6px 12px;" onclick="openLoginModal()">Login</button>
-                            <button class="btn primary" style="padding:6px 12px;" onclick="openSignupModal()">Sign Up</button>
-                        {% endif %}
-                </div>
-        </div>
+    <div class="header">
+        <h1 class="title">SCIAM</h1>
+        <p class="subtitle">Real-time Collaborative Code Editor</p>
+    </div>
     
     <div class="container">
         <div class="card">
             <h2>Get Started</h2>
             <div class="actions">
-                <div class="input-group" style="min-width: 220px;">
-                    <input type="text" id="displayName" placeholder="Enter your name">
-                </div>
                 <button class="btn primary" onclick="createSession()">Create New Session</button>
-                <div class="input-group" style="min-width: 260px;">
+                <div class="input-group">
                     <input type="text" id="sessionId" placeholder="Enter Session ID to Join">
                     <button class="btn secondary" onclick="joinSession()" style="margin-top: 0.5rem; width: 100%;">Join Session</button>
                 </div>
@@ -219,111 +207,8 @@
         <p>SIREN Collaborative Editor | Built with Flask & WebRTC</p>
     </div>
 
-    <!-- Login Modal -->
-    <div id="loginModal" class="modal-overlay" style="display:none;">
-        <div class="modal">
-            <div class="modal-header">
-                <h3>Login</h3>
-                <button class="modal-close" onclick="closeLoginModal()">✕</button>
-            </div>
-            <div id="loginError" class="modal-error" style="display:none;"></div>
-            <div class="modal-body">
-                <label>Email or Username</label>
-                <input type="text" id="loginEmail" placeholder="email or username">
-                <label>Password</label>
-                <input type="password" id="loginPassword" placeholder="password">
-                <button class="btn primary" style="width:100%; margin-top:1rem;" onclick="submitLogin()">Login</button>
-                <div style="margin-top:0.75rem; text-align:center; font-size:0.9rem;">
-                    New here? <a href="#" onclick="switchToSignup(); return false;">Create an account</a>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Signup Modal -->
-    <div id="signupModal" class="modal-overlay" style="display:none;">
-        <div class="modal">
-            <div class="modal-header">
-                <h3>Sign Up</h3>
-                <button class="modal-close" onclick="closeSignupModal()">✕</button>
-            </div>
-            <div id="signupError" class="modal-error" style="display:none;"></div>
-            <div class="modal-body">
-                <label>Username</label>
-                <input type="text" id="signupUsername" placeholder="your name">
-                <label>Email</label>
-                <input type="email" id="signupEmail" placeholder="you@example.com">
-                <label>Password</label>
-                <input type="password" id="signupPassword" placeholder="choose a password">
-                <button class="btn primary" style="width:100%; margin-top:1rem;" onclick="submitSignup()">Create Account</button>
-                <div style="margin-top:0.75rem; text-align:center; font-size:0.9rem;">
-                    Already have an account? <a href="#" onclick="switchToLogin(); return false;">Login</a>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <style>
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.6);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-        .modal {
-            background: var(--panel);
-            border: 1px solid #334155;
-            border-radius: 12px;
-            width: 100%;
-            max-width: 420px;
-            padding: 1rem 1.25rem 1.25rem 1.25rem;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-        }
-        .modal-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 0.5rem;
-        }
-        .modal-close {
-            background: transparent;
-            border: none;
-            color: var(--text);
-            font-size: 1.1rem;
-            cursor: pointer;
-        }
-        .modal-body label {
-            display: block;
-            margin-top: 0.5rem;
-            margin-bottom: 0.25rem;
-            font-size: 0.95rem;
-        }
-        .modal-error {
-            background: #7f1d1d;
-            border: 1px solid #ef4444;
-            color: #fecaca;
-            padding: 0.5rem 0.75rem;
-            border-radius: 8px;
-            margin: 0.5rem 0 0.75rem 0;
-            font-size: 0.95rem;
-        }
-    </style>
-
     <script>
-    const isAuthenticated = ('{{ 1 if is_authenticated else 0 }}' === '1');
-    const serverUsernameJSON = '{{ (username|default(None)|tojson) }}';
-    let authState = {
-        isAuthenticated: isAuthenticated,
-        username: (serverUsernameJSON === 'null' ? null : JSON.parse(serverUsernameJSON))
-    };
-
         async function createSession() {
-            const name = document.getElementById('displayName').value.trim();
-            if (!name) { alert('Please enter your name'); return; }
-            try { localStorage.setItem('display_name', name); } catch (e) {}
             try {
                 const response = await fetch('/create_session', {
                     method: 'POST',
@@ -334,7 +219,10 @@
                 
                 const data = await response.json();
                 if (data.session_id) {
-                    window.location.href = `/editor/${data.session_id}`;
+                    const userName = prompt('Enter your name:', 'Coder');
+                    if (userName !== null) {
+                        window.location.href = `/editor/${data.session_id}?name=${encodeURIComponent(userName)}`;
+                    }
                 }
             } catch (error) {
                 alert('Error creating session: ' + error.message);
@@ -342,15 +230,16 @@
         }
         
         function joinSession() {
-            const name = document.getElementById('displayName').value.trim();
-            if (!name) { alert('Please enter your name'); return; }
-            try { localStorage.setItem('display_name', name); } catch (e) {}
             const sessionId = document.getElementById('sessionId').value.trim();
             if (!sessionId) {
                 alert('Please enter a session ID');
                 return;
             }
-            window.location.href = `/editor/${sessionId}`;
+            
+            const userName = prompt('Enter your name:', 'Coder');
+            if (userName !== null) {
+                window.location.href = `/editor/${sessionId}?name=${encodeURIComponent(userName)}`;
+            }
         }
         
         document.getElementById('sessionId').addEventListener('keypress', function(e) {
@@ -359,111 +248,7 @@
             }
         });
         
-        // Prefill display name from localStorage
-        try {
-            const saved = localStorage.getItem('display_name');
-            if (saved) document.getElementById('displayName').value = saved;
-        } catch (e) {}
         document.getElementById('sessionId').focus();
-
-        // Modal helpers
-        function openLoginModal() {
-            document.getElementById('loginModal').style.display = 'flex';
-            document.getElementById('loginError').style.display = 'none';
-            setTimeout(() => document.getElementById('loginEmail').focus(), 0);
-        }
-        function closeLoginModal() { document.getElementById('loginModal').style.display = 'none'; }
-        function openSignupModal() {
-            document.getElementById('signupModal').style.display = 'flex';
-            document.getElementById('signupError').style.display = 'none';
-            setTimeout(() => document.getElementById('signupUsername').focus(), 0);
-        }
-        function closeSignupModal() { document.getElementById('signupModal').style.display = 'none'; }
-        function switchToSignup() { closeLoginModal(); openSignupModal(); }
-        function switchToLogin() { closeSignupModal(); openLoginModal(); }
-
-        // Submit handlers
-        async function submitLogin() {
-            const email = document.getElementById('loginEmail').value.trim();
-            const password = document.getElementById('loginPassword').value;
-            const err = document.getElementById('loginError');
-            err.style.display = 'none';
-            try {
-                const res = await fetch('/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                    body: JSON.stringify({ email, password })
-                });
-                const data = await res.json();
-                if (!res.ok || !data.success) throw new Error(data.error || 'Login failed');
-                // Update header UI state
-                authState.isAuthenticated = true;
-                authState.username = data.username;
-                updateAuthHeader();
-                closeLoginModal();
-            } catch (e) {
-                err.textContent = e.message;
-                err.style.display = 'block';
-            }
-        }
-
-        async function submitSignup() {
-            const username = document.getElementById('signupUsername').value.trim();
-            const email = document.getElementById('signupEmail').value.trim();
-            const password = document.getElementById('signupPassword').value;
-            const err = document.getElementById('signupError');
-            err.style.display = 'none';
-            try {
-                const res = await fetch('/signup', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                    body: JSON.stringify({ username, email, password })
-                });
-                const data = await res.json();
-                if (!res.ok || !data.success) throw new Error(data.error || 'Signup failed');
-                // Update header UI state
-                authState.isAuthenticated = true;
-                authState.username = username;
-                updateAuthHeader();
-                closeSignupModal();
-            } catch (e) {
-                err.textContent = e.message;
-                err.style.display = 'block';
-            }
-        }
-
-        function updateAuthHeader() {
-            const header = document.getElementById('authHeader');
-            if (authState.isAuthenticated) {
-                header.innerHTML = `
-                    <span id="signedInText" style="font-size:14px; opacity:0.9;">Signed in as <strong id="signedInName">${authState.username}</strong></span>
-                    <a class="btn secondary" href="/logout" style="padding:6px 12px;">Logout</a>
-                `;
-                window.isAuthenticated = true;
-            } else {
-                header.innerHTML = `
-                    <button class="btn secondary" style="padding:6px 12px;" onclick="openLoginModal()">Login</button>
-                    <button class="btn primary" style="padding:6px 12px;" onclick="openSignupModal()">Sign Up</button>
-                `;
-                window.isAuthenticated = false;
-            }
-        }
-
-        // Keyboard submit on Enter
-        ['loginEmail','loginPassword'].forEach(id => {
-            const el = document.getElementById(id);
-            el.addEventListener('keypress', (e) => { if (e.key === 'Enter') submitLogin(); });
-        });
-        ['signupUsername','signupEmail','signupPassword'].forEach(id => {
-            const el = document.getElementById(id);
-            el.addEventListener('keypress', (e) => { if (e.key === 'Enter') submitSignup(); });
-        });
-
-        // Auto-open modal if URL hints it (compat for /login, /signup redirects)
-        const params = new URLSearchParams(window.location.search);
-        const show = params.get('show');
-        if (show === 'login') openLoginModal();
-        if (show === 'signup') openSignupModal();
     </script>
 </body>
 </html>
