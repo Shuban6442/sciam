@@ -384,8 +384,10 @@
   <script>
     const socket = io();
     const sessionId = "{{ session_id }}";
-  // Name provided by server-side after login
-  const myName = "{{ user_name or 'Anonymous' }}";
+    // Prefer visitor-provided display name from localStorage; fallback to server value
+    let myName = (function(){
+      try { return localStorage.getItem('display_name') || "{{ user_name or 'Anonymous' }}"; } catch(e) { return "{{ user_name or 'Anonymous' }}"; }
+    })();
     // Left panel toggle
     const containerEl = document.querySelector('.container');
     const toggleNavBtn = document.getElementById('toggleNavBtn');
