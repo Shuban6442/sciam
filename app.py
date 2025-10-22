@@ -216,13 +216,11 @@ def login():
     return redirect(next_url)
 
 @app.route('/logout')
-@login_required
 def logout():
     flask_session.clear()
     return redirect(url_for('index'))
 
 @app.route("/create_session", methods=["POST"])
-@login_required
 def create_session():
     session_id = str(uuid.uuid4())[:8]
     sessions[session_id] = {
@@ -240,7 +238,6 @@ def create_session():
     return jsonify({"session_id": session_id})
 
 @app.route("/editor/<session_id>")
-@login_required
 def editor(session_id):
     if session_id not in sessions:
         return "Session not found", 404
