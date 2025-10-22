@@ -181,8 +181,11 @@
         <div class="card">
             <h2>Get Started</h2>
             <div class="actions">
+                <div class="input-group" style="min-width: 220px;">
+                    <input type="text" id="displayName" placeholder="Enter your name">
+                </div>
                 <button class="btn primary" onclick="createSession()">Create New Session</button>
-                <div class="input-group">
+                <div class="input-group" style="min-width: 260px;">
                     <input type="text" id="sessionId" placeholder="Enter Session ID to Join">
                     <button class="btn secondary" onclick="joinSession()" style="margin-top: 0.5rem; width: 100%;">Join Session</button>
                 </div>
@@ -318,10 +321,9 @@
     };
 
         async function createSession() {
-            if (!authState.isAuthenticated) {
-                openLoginModal();
-                return;
-            }
+            const name = document.getElementById('displayName').value.trim();
+            if (!name) { alert('Please enter your name'); return; }
+            try { localStorage.setItem('display_name', name); } catch (e) {}
             try {
                 const response = await fetch('/create_session', {
                     method: 'POST',
@@ -340,10 +342,9 @@
         }
         
         function joinSession() {
-            if (!authState.isAuthenticated) {
-                openLoginModal();
-                return;
-            }
+            const name = document.getElementById('displayName').value.trim();
+            if (!name) { alert('Please enter your name'); return; }
+            try { localStorage.setItem('display_name', name); } catch (e) {}
             const sessionId = document.getElementById('sessionId').value.trim();
             if (!sessionId) {
                 alert('Please enter a session ID');
@@ -358,6 +359,11 @@
             }
         });
         
+        // Prefill display name from localStorage
+        try {
+            const saved = localStorage.getItem('display_name');
+            if (saved) document.getElementById('displayName').value = saved;
+        } catch (e) {}
         document.getElementById('sessionId').focus();
 
         // Modal helpers
