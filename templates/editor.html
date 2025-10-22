@@ -22,15 +22,35 @@
       --warning: #f59e0b;
     }
     body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
-    .topbar { display: flex; justify-content: space-between; padding: 10px 16px; background: #111827; border-bottom: 1px solid #2a3342; }
+  .topbar { display: flex; justify-content: space-between; padding: 10px 16px; background: #111827; border-bottom: 1px solid #2a3342; align-items: center; }
     .brand { display: flex; gap: 10px; align-items: center; }
     .session-code { background: #1f2937; padding: 4px 8px; border-radius: 6px; font-family: monospace; }
-    .actions { display: flex; gap: 8px; }
-    .container { display: flex; height: calc(100vh - 50px); }
-    .left { flex: 1; display: flex; flex-direction: column; }
-    #editor { flex: 1; }
+  .actions { display: flex; gap: 8px; align-items: center; }
+  .writer-dot { width: 10px; height: 10px; border-radius: 50%; background: #10b981; display: none; }
+  .container { display: flex; height: calc(100vh - 50px); }
+  .container.nav-collapsed .nav-left { display: none; }
+  .container.nav-collapsed .left { flex: 1; }
+  .nav-left { width: 260px; background: #0b1220; border-right: 1px solid #2a3342; display: flex; flex-direction: column; }
+  .nav-left .section { padding: 12px; border-bottom: 1px solid #2a3342; }
+  .nav-left h4 { margin: 0 0 8px 0; }
+  .left { flex: 1; display: flex; flex-direction: column; }
+  .work-area { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .top-pane { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 150px; }
+  .bottom-pane { flex: 0 0 auto; display: flex; flex-direction: column; height: 35vh; min-height: 120px; }
+  .divider { height: 6px; background: #0b1220; border-top: 1px solid #2a3342; border-bottom: 1px solid #2a3342; cursor: ns-resize; }
+  /* File tabs bar */
+  .file-tabs { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: #0b1220; border-bottom: 1px solid #2a3342; overflow-x: auto; }
+  .file-tab { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; background: #1f2937; color: var(--text); border: 1px solid #2a3342; cursor: pointer; white-space: nowrap; font-size: 13px; }
+  .file-tab.active { background: #1e293b; border-color: #3b82f6; }
+  .file-tab .close { display: inline-block; font-size: 12px; color: #9ca3af; background: transparent; border: none; cursor: pointer; padding: 0 2px; }
+  .file-tab .close:hover { color: #ef4444; }
+  .add-file-btn { margin-left: 4px; padding: 6px 10px; border-radius: 6px; background: #111827; color: var(--text); border: 1px solid #2a3342; cursor: pointer; font-size: 14px; }
+  .add-file-btn:hover { background: #1f2937; }
+  .file-switcher { margin-left: auto; background: #111827; border: 1px solid #2a3342; color: var(--text); border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+  #editor { flex: 1; }
     .toolbar { padding: 8px; background: #111827; display: flex; gap: 8px; border-top: 1px solid #2a3342; align-items: center; }
-    .btn { padding: 8px 16px; border-radius: 6px; border: 1px solid #2a3342; background: #1f2937; color: var(--text); cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+  .btn { padding: 8px 16px; border-radius: 6px; border: 1px solid #2a3342; background: #1f2937; color: var(--text); cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+  .btn.sm { padding: 6px 10px; font-size: 13px; }
     .btn:hover { background: #374151; }
     .btn.primary { background: #2563eb; border-color: #2563eb; }
     .btn.primary:hover { background: #1d4ed8; }
@@ -38,7 +58,7 @@
     .btn.error { background: var(--error); border-color: var(--error); }
     .btn.warning { background: var(--warning); border-color: var(--warning); color: #000; }
     .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-    #output { padding: 12px; background: #0b1220; border-top: 1px solid #2a3342; min-height: 100px; max-height: 200px; overflow-y: auto; white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 14px; }
+  #output { padding: 12px; background: #0b1220; border-top: 1px solid #2a3342; white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 14px; overflow-y: auto; flex: 1 1 auto; min-height: 80px; }
     #participantsDrawer { width: 400px; border-left: 1px solid #2a3342; background: #0b1220; display: flex; flex-direction: column; }
     #plist { list-style: none; margin: 0; padding: 12px; flex: 1; }
     #plist li { display: flex; justify-content: space-between; align-items: center; padding: 10px; margin-bottom: 8px; border: 1px solid #2a3342; border-radius: 6px; background: #111827; }
@@ -52,24 +72,27 @@
     .participant-actions { display: flex; gap: 4px; }
     .action-btn { padding: 4px 8px; font-size: 12px; border-radius: 4px; border: 1px solid #374151; background: #1f2937; color: var(--text); cursor: pointer; }
     .action-btn:hover { background: #374151; }
-    #writerBanner { text-align: center; padding: 8px; background: #1e3a8a; color: #fff; font-weight: bold; display: none; }
-    #audioSection { padding: 12px; border-top: 1px solid #2a3342; background: #111827; }
+  /* removed banner; moved audio to top */
+  #audioSection { padding: 12px; border-top: 1px solid #2a3342; background: #111827; }
     .audio-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
     .audio-participant { padding: 8px 12px; margin: 4px 0; background: #1f2937; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
     .audio-status { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: #6b7280; color: white; }
     .audio-status.connected { background: var(--success); }
     .audio-status.muted { background: var(--error); }
-    #audioControls { padding: 12px; background: #111827; border-top: 1px solid #2a3342; display: flex; align-items: center; gap: 12px; justify-content: center; }
-    #muteButton { display: flex; align-items: center; gap: 8px; min-width: 120px; justify-content: center; background: #374151; }
+  /* topbar mic button */
+  #muteButton { display: flex; align-items: center; gap: 6px; background: #374151; }
     #muteButton.muted { background: var(--error); border-color: var(--error); }
     #muteButton:not(.muted) { background: var(--success); border-color: var(--success); }
     .connection-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #9ca3af; }
     .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; }
     .status-dot.connected { background: var(--success); }
     .status-dot.disconnected { background: var(--error); }
-    #audioLevel { width: 80px; height: 4px; background: #374151; border-radius: 2px; overflow: hidden; }
+  #audioLevel { width: 60px; height: 4px; background: #374151; border-radius: 2px; overflow: hidden; }
     #audioLevelFill { height: 100%; width: 0%; background: var(--success); transition: width 0.1s; }
-    .meeting-stats { display: flex; gap: 16px; font-size: 12px; color: #9ca3af; }
+  .meeting-stats { display: flex; gap: 16px; font-size: 12px; color: #9ca3af; }
+  /* Toast notifications (non-intrusive) */
+  #toastContainer { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 2000; display: flex; flex-direction: column; gap: 8px; }
+  .toast { background: rgba(30,41,59,0.95); color: #e5e7eb; border: 1px solid #334155; border-radius: 8px; padding: 8px 12px; font-size: 14px; box-shadow: 0 6px 16px rgba(0,0,0,0.35); }
 
     /* Input Controls Styles */
     .input-controls {
@@ -229,12 +252,23 @@
     #sendChatBtn:hover {
       background: #1d4ed8;
     }
+
+    /* Status bar */
+    .statusbar { display: flex; gap: 16px; align-items: center; padding: 6px 10px; font-size: 12px; background: #0b1220; border-top: 1px solid #2a3342; color: #9ca3af; }
+    .status-pill { padding: 2px 6px; border-radius: 10px; background: #1f2937; border: 1px solid #2a3342; color: #e5e7eb; }
+    .statusbar .spacer { flex: 1; }
+
+    /* Simple context menu for tabs */
+    .context-menu { position: absolute; background: #111827; border: 1px solid #2a3342; border-radius: 6px; padding: 6px 0; z-index: 9999; display: none; min-width: 160px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+    .context-menu .item { padding: 8px 12px; color: #e5e7eb; cursor: pointer; }
+    .context-menu .item:hover { background: #1f2937; }
   </style>
 </head>
 <body>
   <div class="topbar">
     <div class="brand">
-      <span style="font-weight: bold; color: #3b82f6;">SCIAM</span>
+  <button id="toggleNavBtn" class="btn sm" title="Toggle datasets panel">☰</button>
+  <span style="font-weight: bold; color: #3b82f6;">SCIAM</span>
       <span class="session-code">Session: {{ session_id }}</span>
       <div class="connection-status">
         <span id="statusDot" class="status-dot connected"></span>
@@ -242,53 +276,61 @@
       </div>
     </div>
     <div class="actions">
-      <button id="helpBtn" class="btn" title="Help">❓ Help</button>
+      <span id="writerDot" class="writer-dot" title="You are the writer"></span>
+      <div id="audioLevel" title="Mic level"><div id="audioLevelFill"></div></div>
+      <button id="muteButton" class="btn sm" title="Toggle Mute"><span id="muteIcon">🎤</span><span id="muteText">Mute</span></button>
+      <button id="settingsBtn" class="btn sm" title="Session settings and info">⚙️</button>
+      <button id="helpBtn" class="btn sm" title="Help">❓</button>
     </div>
   </div>
 
-  <div id="writerBanner">✏️ You are the Writer - You can edit the code</div>
-
   <div class="container">
-    <div class="left">
-      <div id="editor"></div>
-      <div class="toolbar">
-        <button id="runBtn" class="btn primary">▶ Run Code</button>
-        <button id="clearBtn" class="btn">🗑️ Clear Output</button>
-        <div style="flex: 1;"></div>
-        
-        <!-- Dataset upload UI -->
-        <label for="datasetFile" style="color:#9ca3af; margin-right:8px;">Dataset:</label>
-        <input type="file" id="datasetFile" style="color:#fff;" />
-        <button id="uploadDatasetBtn" class="btn">Upload</button>
-        <button id="refreshDatasetsBtn" class="btn">Refresh</button>
-        
-        <!-- Static Input Box -->
-        <div class="input-controls">
-          <input type="text" id="staticInput" placeholder="Run code to enable input..." disabled />
-          <button id="sendInputBtn" class="btn" style="background: #059669;" disabled>Send Input</button>
+    <!-- Left Navigation (Datasets, like Colab) -->
+    <div class="nav-left">
+      <div class="section">
+        <h4>📁 Datasets</h4>
+        <input type="file" id="datasetFile" style="color:#fff; width:100%; margin-bottom:8px;" />
+        <div style="display:flex; gap:8px;">
+          <button id="uploadDatasetBtn" class="btn sm" title="Upload selected file">Upload</button>
+          <button id="refreshDatasetsBtn" class="btn sm" title="Refresh dataset list">Refresh</button>
         </div>
-        
-        <button id="settingsBtn" class="btn">⚙️ Settings</button>
       </div>
-      <div id="output"></div>
+      <div class="section" style="flex:1; overflow:auto;">
+        <div id="datasetList" style="color:#9ca3af;">
+          <div style="font-size:12px;">No datasets uploaded</div>
+        </div>
+      </div>
+    </div>
+    <div class="left">
+      <!-- File Tabs -->
+      <div id="fileTabs" class="file-tabs"></div>
+      <div id="workArea" class="work-area">
+        <div id="topPane" class="top-pane">
+          <div id="editor"></div>
+          <div class="toolbar">
+            <button id="runBtn" class="btn primary sm" title="Run (Ctrl+Enter)">▶ Run</button>
+            <button id="clearBtn" class="btn sm" title="Clear Output">🗑️ Clear</button>
+            <div style="flex: 1;"></div>
+          </div>
+        </div>
+        <div id="divider" class="divider" title="Drag to resize editor/output"></div>
+        <div id="bottomPane" class="bottom-pane">
+          <div class="input-controls" style="padding: 8px 12px; background:#111827; border-top:1px solid #2a3342;" title="Send input to the currently running program">
+            <input type="text" id="staticInput" placeholder="Run code to enable input..." disabled />
+            <button id="sendInputBtn" class="btn sm" style="background:#059669;" disabled>Send Input</button>
+          </div>
+          <div id="output"></div>
+        </div>
+      </div>
 
-      <div id="audioControls">
-        <div class="meeting-stats">
-          <span>Participants: <span id="participantCount">1</span></span>
-          <span>Audio: <span id="audioStatus">Connected</span></span>
-        </div>
-        <div style="flex: 1;"></div>
-        <button id="muteButton" class="btn">
-          <span id="muteIcon">🎤</span>
-          <span id="muteText">Mute</span>
-        </button>
-        <div id="audioLevel">
-          <div id="audioLevelFill"></div>
-        </div>
-        <div style="flex: 1;"></div>
-        <div class="meeting-stats">
-          <span>Connected: <span id="peerCount">0</span></span>
-        </div>
+      <!-- Status Bar -->
+      <div id="statusBar" class="statusbar">
+        <span>File: <span id="statusFile" class="status-pill">-</span></span>
+        <span>Role: <span id="statusRole" class="status-pill">Viewer</span></span>
+        <span>Peers: <span id="statusPeers" class="status-pill">0</span></span>
+        <div class="spacer"></div>
+        <span>Session: <span class="status-pill">{{ session_id }}</span></span>
+        <span>Run: <span id="statusRun" class="status-pill">Idle</span></span>
       </div>
     </div>
 
@@ -306,12 +348,7 @@
         </div>
         <ul id="plist"></ul>
 
-        <div style="padding: 12px; border-top: 1px solid #2a3342;">
-          <h4 style="margin: 0 0 6px 0;">Session Datasets</h4>
-          <div id="datasetList" style="max-height:160px; overflow:auto; color:#9ca3af;">
-            <div style="font-size:12px;">No datasets uploaded</div>
-          </div>
-        </div>
+        
 
         <div id="audioSection">
           <div class="audio-header">
@@ -341,18 +378,63 @@
       </div>
     </div>
   </div>
+  <div id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
 
   <script>
     const socket = io();
     const sessionId = "{{ session_id }}";
-    const urlParams = new URLSearchParams(window.location.search);
-    const myName = urlParams.get("name") || "Anonymous";
+  // Name provided by server-side after login
+  const myName = "{{ user_name or 'Anonymous' }}";
+    // Left panel toggle
+    const containerEl = document.querySelector('.container');
+    const toggleNavBtn = document.getElementById('toggleNavBtn');
+    toggleNavBtn.addEventListener('click', () => {
+      containerEl.classList.toggle('nav-collapsed');
+    });
+
+    // Resizable editor/output
+    const workArea = document.getElementById('workArea');
+    const divider = document.getElementById('divider');
+    const bottomPane = document.getElementById('bottomPane');
+    let isResizing = false;
+    let startY = 0;
+    let startHeight = 0;
+
+    divider.addEventListener('mousedown', (e) => {
+      isResizing = true;
+      startY = e.clientY;
+      startHeight = bottomPane.getBoundingClientRect().height;
+      document.body.style.cursor = 'ns-resize';
+      e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isResizing) return;
+      const dy = e.clientY - startY;
+      const newHeight = Math.max(120, startHeight - dy); // bottom min 120px
+      const maxHeight = Math.max(120, workArea.clientHeight - 150 - 6); // leave min for top
+      bottomPane.style.height = Math.min(newHeight, maxHeight) + 'px';
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (isResizing) {
+        isResizing = false;
+        document.body.style.cursor = '';
+      }
+    });
 
     let mySid = null;
     let writerId = null;
     let hostId = null;
     let editor;
+  // Multi-file state
+  let files = {}; // { fileName: content }
+  let activeFile = null;
+  let currentProcessId = null; // for code execution tracking
+  // Context menu state
+  let tabContextMenuEl = null;
+  let tabContextMenuTarget = null;
     
     // Audio State (Google Meet Style)
     let isAudioConnected = false;
@@ -409,7 +491,7 @@
     require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.34.1/min/vs' }});
     require(["vs/editor/editor.main"], function () {
       editor = monaco.editor.create(document.getElementById("editor"), {
-        value: "# Welcome to SCIAM Collaborative Editor\n# Start coding in Python...\nprint('Hello, World!')",
+        value: "",
         language: "python",
         theme: "vs-dark",
         automaticLayout: true,
@@ -419,8 +501,11 @@
       });
 
       editor.onDidChangeModelContent(() => {
+        if (!activeFile) return;
         if (mySid && mySid === writerId) {
-          socket.emit("code_change", { session_id: sessionId, content: editor.getValue() });
+          const val = editor.getValue();
+          files[activeFile] = val;
+          socket.emit("code_change", { session_id: sessionId, file_name: activeFile, content: val });
         }
       });
     });
@@ -553,16 +638,186 @@
     // Code synchronization, participants management, audio functions, etc.
     // ... (all your existing code remains unchanged)
 
-    // Code synchronization
+    // Session files initialization
+    socket.on("session_files", data => {
+      files = data.files || {};
+      activeFile = data.active_file || Object.keys(files)[0] || null;
+      // Initialize UI and editor content via setActiveFile to also set language
+      if (activeFile) {
+        setActiveFile(activeFile, false);
+      } else {
+        refreshFileTabs();
+        if (editor) editor.setValue("");
+      }
+      updateStatusBar();
+    });
+
+    // Code synchronization per file
     socket.on("code_update", data => {
-      if (editor && mySid !== writerId) {
-        const position = editor.getPosition();
-        editor.setValue(data.content);
-        editor.setPosition(position);
+      const fname = data.file_name || activeFile;
+      if (!fname) return;
+      if (typeof data.content === 'string') {
+        files[fname] = data.content;
+        if (editor && fname === activeFile && mySid !== writerId) {
+          const position = editor.getPosition();
+          editor.setValue(data.content);
+          if (position) editor.setPosition(position);
+        }
       }
     });
 
-    // Participants management
+    // Active tab changed
+    socket.on("active_tab_changed", data => {
+      const fname = data.file_name;
+      if (!fname || !files.hasOwnProperty(fname)) return;
+      setActiveFile(fname, false);
+      updateStatusBar();
+    });
+
+    // Tab added/removed/renamed
+    socket.on("tab_added", data => {
+      const { file_name, content } = data;
+      files[file_name] = content || "";
+      refreshFileTabs();
+      // Switch to the newly added tab
+      setActiveFile(file_name, true);
+      updateStatusBar();
+    });
+
+    socket.on("tab_removed", data => {
+      const { file_name, active_file } = data;
+      if (files.hasOwnProperty(file_name)) delete files[file_name];
+      refreshFileTabs();
+      if (active_file && files.hasOwnProperty(active_file)) {
+        setActiveFile(active_file, false);
+      } else {
+        const first = Object.keys(files)[0] || null;
+        if (first) setActiveFile(first, false);
+      }
+      updateStatusBar();
+    });
+
+    socket.on("tab_renamed", data => {
+      const { old_name, new_name } = data;
+      if (!files.hasOwnProperty(old_name)) return;
+      files[new_name] = files[old_name];
+      delete files[old_name];
+      if (activeFile === old_name) activeFile = new_name;
+      refreshFileTabs();
+      if (editor && activeFile) editor.setValue(files[activeFile] || "");
+      updateStatusBar();
+    });
+
+    function refreshFileTabs() {
+      const bar = document.getElementById('fileTabs');
+      bar.innerHTML = '';
+  const isHost = mySid === hostId;
+  const isWriter = mySid === writerId;
+      const fileCount = Object.keys(files).length;
+      Object.keys(files).forEach(name => {
+        const tab = document.createElement('div');
+        tab.className = 'file-tab' + (name === activeFile ? ' active' : '');
+        const label = document.createElement('span');
+        label.textContent = name;
+        tab.appendChild(label);
+
+  if (isHost || isWriter) {
+          const close = document.createElement('button');
+          close.className = 'close';
+          close.title = 'Close tab';
+          close.textContent = '×';
+          // Disable close when only one file remains
+          if (fileCount <= 1) {
+            close.disabled = true;
+            close.style.opacity = '0.4';
+            close.style.cursor = 'not-allowed';
+          }
+          close.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (fileCount <= 1) return;
+            if (!confirm(`Delete ${name}?`)) return;
+            socket.emit('remove_tab', { session_id: sessionId, file_name: name });
+          });
+          tab.appendChild(close);
+
+          // Rename on double click
+          tab.addEventListener('dblclick', () => {
+            const newName = prompt('Rename file', name);
+            if (newName && newName.trim() && newName !== name) {
+              socket.emit('rename_tab', { session_id: sessionId, old_name: name, new_name: newName.trim() });
+            }
+          });
+          // Context menu
+          tab.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            showTabContextMenu(e.clientX, e.clientY, name, { canRename: true, canClose: fileCount > 1 });
+          });
+        }
+
+        tab.addEventListener('click', () => {
+          setActiveFile(name, true);
+        });
+
+        bar.appendChild(tab);
+      });
+
+      // Add button (host only)
+      const addBtn = document.createElement('button');
+      addBtn.id = 'addFileBtn';
+      addBtn.className = 'add-file-btn';
+      addBtn.textContent = '+ Add File';
+      addBtn.style.display = (isHost || isWriter) ? 'inline-block' : 'none';
+      addBtn.addEventListener('click', () => {
+        const fileName = prompt('New file name', 'file.py');
+        if (fileName && fileName.trim()) {
+          socket.emit('add_tab', { session_id: sessionId, file_name: fileName.trim() });
+        }
+      });
+      bar.appendChild(addBtn);
+
+      // Quick file switcher
+      const switcher = document.createElement('select');
+      switcher.id = 'fileSwitcher';
+      switcher.className = 'file-switcher';
+      Object.keys(files).forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n; opt.textContent = n; if (n === activeFile) opt.selected = true; switcher.appendChild(opt);
+      });
+      switcher.addEventListener('change', () => {
+        const name = switcher.value;
+        setActiveFile(name, true);
+      });
+      bar.appendChild(switcher);
+    }
+
+    function setActiveFile(name, broadcast) {
+      if (!name || !files.hasOwnProperty(name)) return;
+      // Save current content
+      if (editor && activeFile) {
+        files[activeFile] = editor.getValue();
+      }
+      activeFile = name;
+      refreshFileTabs();
+      if (editor) {
+        const content = files[name] || '';
+        editor.setValue(content);
+        // Infer language by extension (basic)
+        const ext = (name.split('.').pop() || '').toLowerCase();
+        let lang = 'python';
+        if (['js','mjs','cjs'].includes(ext)) lang = 'javascript';
+        if (['ts'].includes(ext)) lang = 'typescript';
+        if (['json'].includes(ext)) lang = 'json';
+        if (['html'].includes(ext)) lang = 'html';
+  if (['css'].includes(ext)) lang = 'css';
+        monaco.editor.setModelLanguage(editor.getModel(), lang);
+      }
+      if (broadcast && (mySid === hostId || mySid === writerId)) {
+        socket.emit('tab_change', { session_id: sessionId, file_name: name });
+      }
+      updateStatusBar();
+    }
+
+  // Participants management
     socket.on("participants_update", data => {
       const plist = document.getElementById("plist");
       plist.innerHTML = "";
@@ -637,15 +892,21 @@
         plist.appendChild(li);
       }
 
-      // Update participant count
-      document.getElementById("participantCount").textContent = participantCount;
+  // Update participant count (if present)
+  const pcEl = document.getElementById("participantCount");
+  if (pcEl) pcEl.textContent = participantCount;
 
-      // Update editor read-only status and writer banner
+      // Update editor read-only status and writer indicator
       if (editor) {
         const isWriter = mySid === writerId;
         editor.updateOptions({ readOnly: !isWriter });
-        document.getElementById("writerBanner").style.display = isWriter ? "block" : "none";
+        const dot = document.getElementById("writerDot");
+        if (dot) dot.style.display = isWriter ? 'inline-block' : 'none';
       }
+
+      // Update file tabs (host may have changed)
+      refreshFileTabs();
+      updateStatusBar(data.participants);
 
       // Auto-connect to new participants (Google Meet Style)
       if (isAudioConnected) {
@@ -661,41 +922,17 @@
       }
     }
 
-    // Code execution
-    document.getElementById("runBtn").onclick = async () => {
-      const output = document.getElementById("output");
-      output.textContent = "🚀 Running code...\n";
-      
-      try {
-        const response = await fetch("/run_code", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            code: editor.getValue(), 
-            session_id: sessionId 
-          })
-        });
-        
-        const data = await response.json();
-        output.textContent += data.output + "\n✅ Execution completed";
-      } catch (error) {
-        output.textContent += `❌ Error: ${error.message}\n`;
-      }
-    };
-
-    document.getElementById("clearBtn").onclick = () => {
-      document.getElementById("output").textContent = "";
-    };
+    // (run/clear are defined later with input streaming support)
 
     // [Keep all your existing audio functions - initializeAudio, setupAudioVisualization, etc.]
     // ... (all audio functions remain the same from your previous version)
 
     // GOOGLE MEET STYLE AUDIO SYSTEM
-    const muteButton = document.getElementById("muteButton");
-    const muteIcon = document.getElementById("muteIcon");
-    const muteText = document.getElementById("muteText");
-    const audioStatus = document.getElementById("audioStatus");
-    const peerCount = document.getElementById("peerCount");
+  const muteButton = document.getElementById("muteButton");
+  const muteIcon = document.getElementById("muteIcon");
+  const muteText = document.getElementById("muteText");
+  const audioStatus = document.getElementById("audioStatus");
+  const peerCount = document.getElementById("peerCount");
     const audioList = document.getElementById("audioList");
     const audioCount = document.getElementById("audioCount");
     const audioLevelFill = document.getElementById("audioLevelFill");
@@ -730,9 +967,8 @@
 
       } catch (error) {
         console.error("❌ Failed to auto-connect audio:", error);
-        showMessage("❌ Could not access microphone. Please check browser permissions.");
-        audioStatus.textContent = "Failed";
-        audioStatus.style.color = "#ef4444";
+  showMessage("❌ Could not access microphone. Please check browser permissions.");
+  if (audioStatus) { audioStatus.textContent = "Failed"; audioStatus.style.color = "#ef4444"; }
       }
     }
 
@@ -775,6 +1011,14 @@
         myIndicator.classList.add('speaking');
       } else if (myIndicator) {
         myIndicator.classList.remove('speaking');
+      }
+      // If muted and user appears to be speaking, gently notify (no output pollution)
+      if (isMuted && level > 18) {
+        const now = Date.now();
+        if (!lastMutedToastAt || (now - lastMutedToastAt) > 6000) {
+          showToast('You are muted — unmute to speak');
+          lastMutedToastAt = now;
+        }
       }
       
       requestAnimationFrame(updateAudioLevel);
@@ -853,8 +1097,7 @@
       }
       
       isAudioConnected = false;
-      audioStatus.textContent = "Disconnected";
-      audioStatus.style.color = "#ef4444";
+  if (audioStatus) { audioStatus.textContent = "Disconnected"; audioStatus.style.color = "#ef4444"; }
       audioLevelFill.style.width = "0%";
       
       // Clear audio list
@@ -865,16 +1108,30 @@
     }
 
     function updateAudioCount() {
-      const count = Object.keys(pcPeers).length;
-      peerCount.textContent = count;
-      audioCount.textContent = `${count} user${count !== 1 ? 's' : ''}`;
+  const count = Object.keys(pcPeers).length;
+  if (peerCount) peerCount.textContent = count;
+  if (audioCount) audioCount.textContent = `${count} user${count !== 1 ? 's' : ''}`;
     }
 
+    // Developer-only audio log (no output pollution)
     function showMessage(message) {
-      const output = document.getElementById("output");
-      const originalContent = output.textContent;
-      output.textContent = `[Audio] ${message}\n${originalContent}`;
-      output.scrollTop = 0;
+      console.log("[Audio]", message);
+    }
+
+    // Lightweight toast notifications
+    let lastMutedToastAt = 0;
+    function showToast(message, duration = 3000) {
+      const cont = document.getElementById('toastContainer');
+      if (!cont) return;
+      const el = document.createElement('div');
+      el.className = 'toast';
+      el.textContent = message;
+      cont.appendChild(el);
+      setTimeout(() => {
+        el.style.transition = 'opacity 200ms';
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 220);
+      }, duration);
     }
 
     // WebRTC Peer Connection Management
@@ -1054,6 +1311,8 @@
         runBtn.disabled = true;
         runBtn.textContent = "⏳ Running...";
         runBtn.classList.add("warning");
+      document.getElementById('statusRun').textContent = 'Running';
+      document.getElementById('statusRun').classList.add('running');
         
         // Enable input controls
         staticInput.disabled = false;
@@ -1077,6 +1336,7 @@
                 currentProcessId = data.process_id;
                 console.log("✅ Code execution started with process ID:", currentProcessId);
                 output.textContent += "Program started. Use the input box above to provide input.\n";
+        document.getElementById('statusRun').textContent = 'Running';
             } else if (data.status === "error") {
                 output.textContent += `❌ ${data.message}\n`;
                 resetExecutionState();
@@ -1099,7 +1359,7 @@
         }
     });
 
-    function sendStaticInput() {
+  function sendStaticInput() {
         const userInput = staticInput.value.trim();
         
         if (!userInput) {
@@ -1172,6 +1432,8 @@
         staticInput.placeholder = "Run code to enable input...";
         
         currentProcessId = null;
+    const statusRun = document.getElementById('statusRun');
+    statusRun.textContent = 'Idle';
     }
 
     document.getElementById("clearBtn").onclick = () => {
@@ -1241,6 +1503,132 @@
     socket.on("connect", () => {
       setTimeout(refreshDatasets, 600);
     });
+
+    // Show server-side errors
+    socket.on('error', (data) => {
+      try {
+        if (data && data.msg) {
+          alert(data.msg);
+        }
+      } catch (e) {
+        // ignore
+      }
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      const tag = (document.activeElement && document.activeElement.tagName || '').toLowerCase();
+      const isTyping = tag === 'input' || tag === 'textarea';
+      // Ctrl+Enter -> Run
+      if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('runBtn').click();
+        return;
+      }
+      // Ctrl+N -> Add file (host/writer)
+      if (e.ctrlKey && (e.key === 'n' || e.key === 'N')) {
+        if (mySid === hostId || mySid === writerId) {
+          e.preventDefault();
+          const fileName = prompt('New file name', 'file.py');
+          if (fileName && fileName.trim()) {
+            socket.emit('add_tab', { session_id: sessionId, file_name: fileName.trim() });
+          }
+        }
+        return;
+      }
+      // F2 -> Rename current tab (host/writer)
+      if (e.key === 'F2') {
+        if (mySid === hostId || mySid === writerId) {
+          e.preventDefault();
+          if (activeFile) {
+            const newName = prompt('Rename file', activeFile);
+            if (newName && newName.trim() && newName !== activeFile) {
+              socket.emit('rename_tab', { session_id: sessionId, old_name: activeFile, new_name: newName.trim() });
+            }
+          }
+        }
+        return;
+      }
+      // Ctrl+W -> Close current tab (host/writer)
+      if (e.ctrlKey && (e.key === 'w' || e.key === 'W')) {
+        if (mySid === hostId || mySid === writerId) {
+          e.preventDefault();
+          if (Object.keys(files).length > 1 && activeFile) {
+            if (confirm(`Delete ${activeFile}?`)) {
+              socket.emit('remove_tab', { session_id: sessionId, file_name: activeFile });
+            }
+          }
+        }
+        return;
+      }
+      // Ctrl+/ -> Focus chat
+      if (e.ctrlKey && e.key === '/') {
+        e.preventDefault();
+        const chatInputEl = document.getElementById('chatInput');
+        if (chatInputEl) chatInputEl.focus();
+        return;
+      }
+    });
+
+    // Context menu helpers
+    function showTabContextMenu(x, y, name, { canRename, canClose }) {
+      hideTabContextMenu();
+      tabContextMenuTarget = name;
+      if (!tabContextMenuEl) {
+        tabContextMenuEl = document.createElement('div');
+        tabContextMenuEl.className = 'context-menu';
+        document.body.appendChild(tabContextMenuEl);
+      }
+      tabContextMenuEl.innerHTML = '';
+      if (canRename) {
+        const itRename = document.createElement('div');
+        itRename.className = 'item'; itRename.textContent = 'Rename';
+        itRename.addEventListener('click', () => {
+          const newName = prompt('Rename file', name);
+          if (newName && newName.trim() && newName !== name) {
+            socket.emit('rename_tab', { session_id: sessionId, old_name: name, new_name: newName.trim() });
+          }
+          hideTabContextMenu();
+        });
+        tabContextMenuEl.appendChild(itRename);
+      }
+      if (canClose) {
+        const itClose = document.createElement('div');
+        itClose.className = 'item'; itClose.textContent = 'Close';
+        itClose.addEventListener('click', () => {
+          if (confirm(`Delete ${name}?`)) {
+            socket.emit('remove_tab', { session_id: sessionId, file_name: name });
+          }
+          hideTabContextMenu();
+        });
+        tabContextMenuEl.appendChild(itClose);
+      }
+      tabContextMenuEl.style.left = x + 'px';
+      tabContextMenuEl.style.top = y + 'px';
+      tabContextMenuEl.style.display = 'block';
+    }
+    function hideTabContextMenu() {
+      if (tabContextMenuEl) tabContextMenuEl.style.display = 'none';
+      tabContextMenuTarget = null;
+    }
+    document.addEventListener('click', hideTabContextMenu);
+    document.addEventListener('contextmenu', (e) => {
+      if (!e.target.closest || !e.target.closest('.file-tab')) {
+        hideTabContextMenu();
+      }
+    });
+
+    // Status bar updater
+    function updateStatusBar(participants) {
+      const statusFile = document.getElementById('statusFile');
+      const statusRole = document.getElementById('statusRole');
+      const statusPeers = document.getElementById('statusPeers');
+      statusFile.textContent = activeFile || '-';
+      statusRole.textContent = mySid === hostId ? 'Host' : (mySid === writerId ? 'Writer' : 'Viewer');
+      const p = participants || {};
+      const count = Object.keys(p).length || document.getElementById('participantCount')?.textContent || 0;
+      statusPeers.textContent = count;
+    }
   </script>
 </body>
 </html>
