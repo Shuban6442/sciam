@@ -10,14 +10,82 @@ import time
 import shutil
 import re
 from datetime import datetime
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session as flask_session
 import flask
 from flask_socketio import SocketIO, emit, join_room
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
+from functools import wraps
+import pymysql
+from pymysql.cursors import DictCursor
+# Database configuration (MySQL via PyMySQL)
+MYSQL_HOST = os.environ.get('MYSQL_HOST', 'localhost')
+MYSQL_PORT = int(os.environ.get('MYSQL_PORT', '3306'))
+MYSQL_USER = os.environ.get('MYSQL_USER', 'root')
+MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD', 'Parthavi@1204')
+MYSQL_DB = os.environ.get('MYSQL_DB', 'sciam')
 
+# Flask app initialization
 app = Flask(__name__)
-# Fix missing SECRET_KEY assignment
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_secret_key')
+
+
+
+
+def get_db():
+    return pymysql.connect(
+        host=MYSQL_HOST,
+        port=MYSQL_PORT,
+        user=MYSQL_USER,
+        password=MYSQL_PASSWORD,
+        database=MYSQL_DB,
+        cursorclass=DictCursor,
+        autocommit=True,
+    )
+
+def init_db():
+    ddl = (
+        "CREATE DATABASE IF NOT EXISTS `{db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;".format(db=MYSQL_DB)
+    )
+    # Create database if needed (requires connection without db)
+    try:
+        conn_server = pymysql.connect(host=MYSQL_HOST, port=MYSQL_PORT, user=MYSQL_USER, password=MYSQL_PASSWORD, cursorclass=DictCursor, autocommit=True)
+        with conn_server.cursor() as cur:
+            cur.execute(ddl)
+    finally:
+        try:
+            conn_server.close()
+        except Exception:
+            pass
+    # Now ensure users table exists
+    create_users = (
+        """
+        CREATE TABLE IF NOT EXISTS users (
+          id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+          email VARCHAR(255) NOT NULL,
+          username VARCHAR(80) NOT NULL,
+          password_hash VARCHAR(255) NOT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          UNIQUE KEY uq_users_email (email),
+          UNIQUE KEY uq_users_username (username)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        """
+    )
+    conn = get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(create_users)
+    finally:
+        conn.close()
+
+def login_required(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if not flask_session.get('user_id'):
+            return redirect(url_for('login', next=request.path))
+        return func(*args, **kwargs)
+    return wrapper
 
 # Use threading async_mode for better compatibility
 socketio = SocketIO(app, 
@@ -37,15 +105,132 @@ os.makedirs(UPLOAD_ROOT, exist_ok=True)
 # Limit uploads to 200 MB per file (adjust if needed)
 app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024
 
+# ------------------ Models ------------------
+# ------------------ Auth Helpers ------------------
+def get_user_by_email_or_username(email_or_username: str):
+    sql = "SELECT * FROM users WHERE email=%s OR username=%s LIMIT 1"
+    conn = get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, (email_or_username.lower(), email_or_username))
+            return cur.fetchone()
+    finally:
+        conn.close()
+
+def create_user(username: str, email: str, password: str):
+    password_hash = generate_password_hash(password)
+    sql = "INSERT INTO users (email, username, password_hash) VALUES (%s, %s, %s)"
+    conn = get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, (email.lower(), username, password_hash))
+            return cur.lastrowid
+    finally:
+        conn.close()
+
 @app.route("/")
 def index():
-    return render_template("home.html")
+    return render_template(
+        "home.html",
+        is_authenticated=bool(flask_session.get('user_id')),
+        username=flask_session.get('username'),
+    )
+
+# ------------------ Auth Routes ------------------
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    # Support in-page modal: GET redirects to home with modal hint
+    if request.method == 'GET':
+        return redirect(url_for('index', show='signup'))
+
+    # Handle POST - allow AJAX (JSON) or form-encoded
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json
+    if request.is_json:
+        payload = request.get_json(silent=True) or {}
+        username = (payload.get('username') or '').strip()
+        email = (payload.get('email') or '').strip().lower()
+        password = payload.get('password') or ''
+    else:
+        username = request.form.get('username', '').strip()
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+
+    if not username or not email or not password:
+        if is_ajax:
+            return jsonify(success=False, error='All fields are required'), 400
+        flash('All fields are required', 'error')
+        return redirect(url_for('index', show='signup'))
+
+    existing = get_user_by_email_or_username(email) or get_user_by_email_or_username(username)
+    if existing:
+        if is_ajax:
+            return jsonify(success=False, error='Username or email already exists'), 409
+        flash('Username or email already exists', 'error')
+        return redirect(url_for('index', show='signup'))
+
+    try:
+        user_id = create_user(username, email, password)
+    except Exception as e:
+        if is_ajax:
+            return jsonify(success=False, error=f'Failed to create user: {e}'), 500
+        flash('Failed to create user', 'error')
+        return redirect(url_for('index', show='signup'))
+
+    flask_session['user_id'] = user_id
+    flask_session['username'] = username
+    flask_session['email'] = email
+    if is_ajax:
+        return jsonify(success=True, username=username)
+    next_url = request.args.get('next') or url_for('index')
+    return redirect(next_url)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    # Support in-page modal: GET redirects to home with modal hint
+    if request.method == 'GET':
+        return redirect(url_for('index', show='login'))
+
+    # Handle POST - allow AJAX (JSON) or form-encoded
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json
+    if request.is_json:
+        payload = request.get_json(silent=True) or {}
+        email_or_username = (payload.get('email') or '').strip()
+        password = payload.get('password') or ''
+    else:
+        email_or_username = request.form.get('email', '').strip()
+        password = request.form.get('password', '')
+
+    user = get_user_by_email_or_username(email_or_username)
+    if not user or not check_password_hash(user['password_hash'], password):
+        if is_ajax:
+            return jsonify(success=False, error='Invalid credentials'), 401
+        flash('Invalid credentials', 'error')
+        return redirect(url_for('index', show='login'))
+
+    flask_session['user_id'] = user['id']
+    flask_session['username'] = user['username']
+    flask_session['email'] = user['email']
+    if is_ajax:
+        return jsonify(success=True, username=user['username'])
+    next_url = request.args.get('next') or url_for('index')
+    return redirect(next_url)
+
+@app.route('/logout')
+@login_required
+def logout():
+    flask_session.clear()
+    return redirect(url_for('index'))
 
 @app.route("/create_session", methods=["POST"])
+@login_required
 def create_session():
     session_id = str(uuid.uuid4())[:8]
     sessions[session_id] = {
-        "content": "# Welcome to SIREN Collaborative Editor\n# Start coding in Python...\nprint('Hello, World!')",
+        # Multi-file structure
+        "files": {
+            "main.py": "# Welcome to SIREN Collaborative Editor\n# Start coding in Python...\nprint('Hello, World!')"
+        },
+        "active_file": "main.py",
         "participants": {},
         "host_id": None,
         "writer_id": None,
@@ -55,10 +240,11 @@ def create_session():
     return jsonify({"session_id": session_id})
 
 @app.route("/editor/<session_id>")
+@login_required
 def editor(session_id):
     if session_id not in sessions:
         return "Session not found", 404
-    return render_template("editor.html", session_id=session_id)
+    return render_template("editor.html", session_id=session_id, user_name=flask_session.get('username') or 'Anonymous')
 
 @app.route("/run_code", methods=["POST"])
 def run_code():
@@ -397,7 +583,8 @@ def handle_disconnect():
 @socketio.on("join_session")
 def handle_join(data):
     session_id = data.get("session_id")
-    name = data.get("name", "Anonymous")
+    # Prefer logged-in user name (from Flask session), fallback to client-provided name
+    name = (flask_session.get('username') or data.get("name", "Anonymous"))
     sid = request.sid
     
     if session_id not in sessions:
@@ -418,8 +605,11 @@ def handle_join(data):
         "sid": sid
     }
     
-    # Send current code to new user
-    emit("code_update", {"content": session["content"]})
+    # Send current files and active tab to new user
+    emit("session_files", {
+        "files": session.get("files", {}),
+        "active_file": session.get("active_file", "main.py")
+    })
     
     # Send chat history to new user
     if session["chat_messages"]:
@@ -491,15 +681,123 @@ def handle_get_participants(data):
 def handle_code_change(data):
     session_id = data.get("session_id")
     content = data.get("content", "")
+    file_name = data.get("file_name") or data.get("file") or None
     sid = request.sid
     
     if session_id in sessions:
         session = sessions[session_id]
         # Only allow the current writer to make changes
         if session["writer_id"] == sid:
-            session["content"] = content
-            emit("code_update", {"content": content}, room=session_id, include_self=False)
-            print(f"📝 Code updated by {session['participants'][sid]['name']} in session {session_id}")
+            target_file = file_name or session.get("active_file", "main.py")
+            if "files" not in session:
+                session["files"] = {}
+            if target_file not in session["files"]:
+                session["files"][target_file] = ""
+            session["files"][target_file] = content
+            emit("code_update", {"file_name": target_file, "content": content}, room=session_id, include_self=False)
+            author = session['participants'].get(sid, {}).get('name', 'unknown')
+            print(f"📝 Code updated in {target_file} by {author} in session {session_id}")
+
+@socketio.on("add_tab")
+def handle_add_tab(data):
+    """Host or writer can add a new file tab."""
+    session_id = data.get("session_id")
+    requested_name = (data.get("file_name") or "").strip() or None
+    sid = request.sid
+    if session_id not in sessions:
+        emit("error", {"msg": "Session not found"})
+        return
+    session = sessions[session_id]
+    if sid not in (session.get("host_id"), session.get("writer_id")):
+        emit("error", {"msg": "Only host or writer can add files"})
+        return
+    base_name = requested_name or "file.py"
+    name = base_name
+    i = 2
+    if "files" not in session:
+        session["files"] = {}
+    while name in session["files"]:
+        if "." in base_name:
+            stem, ext = base_name.rsplit(".", 1)
+            name = f"{stem}{i}.{ext}"
+        else:
+            name = f"{base_name}{i}"
+        i += 1
+    session["files"][name] = ""
+    emit("tab_added", {"file_name": name, "content": ""}, room=session_id)
+    print(f"➕ Tab added {name} in session {session_id}")
+
+@socketio.on("remove_tab")
+def handle_remove_tab(data):
+    """Host or writer: remove a file tab (cannot remove last file)."""
+    session_id = data.get("session_id")
+    file_name = (data.get("file_name") or "").strip()
+    sid = request.sid
+    if session_id not in sessions:
+        emit("error", {"msg": "Session not found"})
+        return
+    session = sessions[session_id]
+    if sid not in (session.get("host_id"), session.get("writer_id")):
+        emit("error", {"msg": "Only host or writer can remove files"})
+        return
+    if not file_name or file_name not in session.get("files", {}):
+        emit("error", {"msg": "File not found"})
+        return
+    if len(session["files"]) <= 1:
+        emit("error", {"msg": "Cannot remove the last file"})
+        return
+    was_active = session.get("active_file") == file_name
+    del session["files"][file_name]
+    new_active = session.get("active_file")
+    if was_active:
+        new_active = sorted(session["files"].keys())[0]
+        session["active_file"] = new_active
+    emit("tab_removed", {"file_name": file_name, "active_file": new_active}, room=session_id)
+    print(f"➖ Tab removed {file_name} in session {session_id}")
+
+@socketio.on("rename_tab")
+def handle_rename_tab(data):
+    """Host or writer can rename a file tab."""
+    session_id = data.get("session_id")
+    old_name = (data.get("old_name") or "").strip()
+    new_name = (data.get("new_name") or "").strip()
+    sid = request.sid
+    if session_id not in sessions:
+        emit("error", {"msg": "Session not found"})
+        return
+    session = sessions[session_id]
+    if sid not in (session.get("host_id"), session.get("writer_id")):
+        emit("error", {"msg": "Only host or writer can rename files"})
+        return
+    if not old_name or not new_name or old_name not in session.get("files", {}):
+        emit("error", {"msg": "Invalid file name"})
+        return
+    if new_name in session["files"] and new_name != old_name:
+        emit("error", {"msg": "A file with the new name already exists"})
+        return
+    session["files"][new_name] = session["files"].pop(old_name)
+    if session.get("active_file") == old_name:
+        session["active_file"] = new_name
+    emit("tab_renamed", {"old_name": old_name, "new_name": new_name}, room=session_id)
+    print(f"✏️ Tab renamed {old_name} -> {new_name} in session {session_id}")
+
+@socketio.on("tab_change")
+def handle_tab_change(data):
+    """Host or writer may change the active tab for the session."""
+    session_id = data.get("session_id")
+    file_name = (data.get("file_name") or "").strip()
+    sid = request.sid
+    if session_id not in sessions:
+        emit("error", {"msg": "Session not found"})
+        return
+    session = sessions[session_id]
+    if sid not in (session.get("host_id"), session.get("writer_id")):
+        return
+    if not file_name or file_name not in session.get("files", {}):
+        return
+    session["active_file"] = file_name
+    emit("active_tab_changed", {"file_name": file_name}, room=session_id)
+    print(f"📄 Active tab switched to {file_name} in session {session_id}")
 
 @socketio.on("grant_write")
 def handle_grant_write(data):
@@ -704,4 +1002,9 @@ if __name__ == "__main__":
     print("📍 Local URL: http://localhost:5000")
     print("💡 Features: Real-time coding, Python execution, User management, Chat")
     print("🔧 Running with threading async_mode for better compatibility")
+    try:
+        init_db()
+        print("🗄️ Database initialized (tables ensured).")
+    except Exception as e:
+        print(f"⚠️ DB init failed: {e}")
     socketio.run(app, host="0.0.0.0", port=5000, debug=True)
