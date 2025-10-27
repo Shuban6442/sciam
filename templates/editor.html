@@ -310,6 +310,7 @@
           <div class="toolbar">
             <button id="runBtn" class="btn primary sm" title="Run (Ctrl+Enter)">▶ Run</button>
             <button id="clearBtn" class="btn sm" title="Clear Output">🗑️ Clear</button>
+            <button id="downloadBtn" class="btn sm" title="Download current file">⬇️ Download</button>
             <div style="flex: 1;"></div>
           </div>
         </div>
@@ -1441,6 +1442,27 @@
     document.getElementById("clearBtn").onclick = () => {
         document.getElementById("output").textContent = "";
         resetExecutionState();
+    };
+    // Download current file
+    document.getElementById("downloadBtn").onclick = () => {
+      try {
+        const name = (activeFile || 'code.txt').toString();
+        const safeName = name.replace(/[\\\/:*?"<>|]/g, '_');
+        const text = editor ? editor.getValue() : '';
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = safeName;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          URL.revokeObjectURL(url);
+          a.remove();
+        }, 0);
+      } catch (e) {
+        alert('Failed to download file: ' + (e && e.message ? e.message : e));
+      }
     };
     console.log("🚀SCIAM with Chat functionality ready!");
 
